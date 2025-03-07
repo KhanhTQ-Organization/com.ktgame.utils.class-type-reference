@@ -98,7 +98,6 @@ namespace com.ktgame.utils.class_type_reference
 
         void ISerializationCallbackReceiver.OnBeforeSerialize() { }
 
-
         public static implicit operator string(ClassTypeReference typeReference)
         {
             return typeReference.classRef;
