@@ -36,8 +36,7 @@ namespace com.ktgame.utils.class_type_reference
         /// <inheritdoc/>
         public override bool IsConstraintSatisfied(Type type)
         {
-            return base.IsConstraintSatisfied(type)
-                   && this.BaseType.IsAssignableFrom(type) && type != this.BaseType;
+            return base.IsConstraintSatisfied(type) && this.BaseType.IsAssignableFrom(type) && type != this.BaseType;
         }
     }
 }
