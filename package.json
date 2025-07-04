@@ -7,5 +7,8 @@
     "name": "ktgame",
     "email": "khanhquang0912qh@gmail.com",
     "url": "https://github.com/KhanhTQ-hub/com.ktgame.utils.class-type-reference"
+  },
+  "publishConfig": {
+    "registry": "http://3.25.208.95:4873"
   }
 }
