@@ -9,7 +9,7 @@ namespace com.ktgame.utils.class_type_reference
     /// Constraint that allows selection of classes that extend a specific class when
     /// selecting a <see cref="ClassTypeReference"/> with the Unity inspector.
     /// </summary>
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Field| AttributeTargets.Property, AllowMultiple = false)]
     public sealed class ClassExtendsAttribute : ClassTypeConstraintAttribute
     {
         /// <summary>
