@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/KhanhTQ-Organization/com.ktgame.utils.class-type-reference/compare/v1.0.4...v1.0.5) (2026-08-21)
+
+
+### Bug Fixes
+
+* update check null ([070418d](https://github.com/KhanhTQ-Organization/com.ktgame.utils.class-type-reference/commit/070418d8c1a0f0a19b1869cfc56776a5514a3ebd))
+
 ## [1.0.4](https://github.com/KhanhTQ-Organization/com.ktgame.utils.class-type-reference/compare/v1.0.3...v1.0.4) (2026-05-06)
 
 
