@@ -87,7 +87,23 @@ namespace com.ktgame.utils.class_type_reference
 
                 if (this.type == null)
                 {
-                    Debug.LogWarning(string.Format("'{0}' was referenced but class type was not found.", this.classRef));
+                    // Fallback: search across all assemblies if the class was moved to another asmdef
+                    var className = this.classRef.Split(',')[0].Trim();
+                    foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = assembly.GetType(className);
+                        if (t != null)
+                        {
+                            this.type = t;
+                            this.classRef = GetClassRef(t); // Update to new location automatically
+                            break;
+                        }
+                    }
+
+                    if (this.type == null)
+                    {
+                        Debug.LogWarning(string.Format("'{0}' was referenced but class type was not found.", this.classRef));
+                    }
                 }
             }
             else

@@ -73,8 +73,20 @@ namespace com.ktgame.utils.class_type_reference
 
         private static void FilterTypes(Assembly assembly, ClassTypeConstraintAttribute filter, ICollection<Type> excludedTypes, List<Type> output)
         {
-            foreach (var type in assembly.GetTypes())
+            Type[] types;
+            try
             {
+                types = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                types = e.Types;
+            }
+
+            foreach (var type in types)
+            {
+                if (type == null) continue;
+                
                 if (!type.IsPublic || !type.IsClass)
                 {
                     continue;
