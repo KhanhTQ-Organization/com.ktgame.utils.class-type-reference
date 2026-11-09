@@ -47,6 +47,16 @@ namespace com.ktgame.utils.class_type_reference
         /// </returns>
         public virtual bool IsConstraintSatisfied(Type type)
         {
+            if (type == null)
+            {
+                return false;
+            }
+            
+            if (type.ContainsGenericParameters || (type.IsAbstract && type.IsSealed))
+            {
+                return false;
+            }
+
             return this.AllowAbstract || !type.IsAbstract;
         }
     }

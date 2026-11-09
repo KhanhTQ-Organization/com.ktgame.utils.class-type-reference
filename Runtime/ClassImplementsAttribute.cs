@@ -9,7 +9,7 @@ namespace com.ktgame.utils.class_type_reference
     /// Constraint that allows selection of classes that implement a specific interface
     /// when selecting a <see cref="ClassTypeReference"/> with the Unity inspector.
     /// </summary>
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public sealed class ClassImplementsAttribute : ClassTypeConstraintAttribute
     {
         /// <summary>
@@ -25,25 +25,35 @@ namespace com.ktgame.utils.class_type_reference
         {
             this.InterfaceType = interfaceType;
         }
-
-
-        /// <summary>
-        /// Gets the type of interface that selectable classes must implement.
-        /// </summary>
+        
         public Type InterfaceType { get; private set; }
 
 
         /// <inheritdoc/>
         public override bool IsConstraintSatisfied(Type type)
         {
-            if (base.IsConstraintSatisfied(type))
+            if (!base.IsConstraintSatisfied(type))
             {
-                foreach (var interfaceType in type.GetInterfaces())
+                return false;
+            }
+            
+            if (this.InterfaceType == null)
+            {
+                return true;
+            }
+
+            bool isGenericDefinition = this.InterfaceType.IsGenericTypeDefinition;
+            foreach (var interfaceType in type.GetInterfaces())
+            {
+                if (interfaceType == this.InterfaceType)
                 {
-                    if (interfaceType == this.InterfaceType)
-                    {
-                        return true;
-                    }
+                    return true;
+                }
+                
+                if (isGenericDefinition && interfaceType.IsGenericType &&
+                    interfaceType.GetGenericTypeDefinition() == this.InterfaceType)
+                {
+                    return true;
                 }
             }
 

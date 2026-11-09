@@ -9,9 +9,6 @@ using UnityEngine;
 
 namespace com.ktgame.utils.class_type_reference
 {
-    /// <summary>
-    /// Custom property drawer for <see cref="ClassTypeReference"/> properties.
-    /// </summary>
     [CustomPropertyDrawer(typeof(ClassTypeReference))]
     [CustomPropertyDrawer(typeof(ClassTypeConstraintAttribute), true)]
     public sealed class ClassTypeReferencePropertyDrawer : PropertyDrawer
@@ -55,18 +52,42 @@ namespace com.ktgame.utils.class_type_reference
         /// </example>
         public static Func<ICollection<Type>> ExcludedTypeCollectionGetter { get; set; }
 
+        private const ClassGrouping DefaultGrouping = ClassGrouping.ByNamespaceFlat;
+
         private static List<Type> GetFilteredTypes(ClassTypeConstraintAttribute filter)
         {
             var types = new List<Type>();
 
             var excludedTypes = (ExcludedTypeCollectionGetter != null ? ExcludedTypeCollectionGetter() : null);
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            
+            Type baseOrInterface = null;
+            var extendsFilter = filter as ClassExtendsAttribute;
+            var implementsFilter = filter as ClassImplementsAttribute;
+            if (extendsFilter != null && filter.GetType() == typeof(ClassExtendsAttribute))
             {
-                FilterTypes(assembly, filter, excludedTypes, types);
+                baseOrInterface = extendsFilter.BaseType;
+            }
+            else if (implementsFilter != null && filter.GetType() == typeof(ClassImplementsAttribute))
+            {
+                baseOrInterface = implementsFilter.InterfaceType;
             }
 
-            types.Sort((a, b) => a.FullName.CompareTo(b.FullName));
+            if (baseOrInterface != null)
+            {
+                foreach (var type in TypeCache.GetTypesDerivedFrom(baseOrInterface))
+                {
+                    AddIfSelectable(type, filter, excludedTypes, types);
+                }
+            }
+            else
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    FilterTypes(assembly, filter, excludedTypes, types);
+                }
+            }
+
+            types.Sort((a, b) => string.CompareOrdinal(a.FullName, b.FullName));
 
             return types;
         }
@@ -82,47 +103,40 @@ namespace com.ktgame.utils.class_type_reference
             {
                 types = e.Types;
             }
+            catch (Exception)
+            {
+                return;
+            }
 
             foreach (var type in types)
             {
-                if (type == null) continue;
-                
-                if (!type.IsPublic || !type.IsClass)
-                {
-                    continue;
-                }
-
-                if (filter != null && !filter.IsConstraintSatisfied(type))
-                {
-                    continue;
-                }
-
-                if (excludedTypes != null && excludedTypes.Contains(type))
-                {
-                    continue;
-                }
-
-                output.Add(type);
+                AddIfSelectable(type, filter, excludedTypes, output);
             }
         }
 
-        #endregion
-
-
-        #region Type Utility
-
-        private static Dictionary<string, Type> s_TypeMap = new Dictionary<string, Type>();
-
-        private static Type ResolveType(string classRef)
+        private static void AddIfSelectable(Type type, ClassTypeConstraintAttribute filter, ICollection<Type> excludedTypes, List<Type> output)
         {
-            Type type;
-            if (!s_TypeMap.TryGetValue(classRef, out type))
+            if (type == null || type.FullName == null)
             {
-                type = !string.IsNullOrEmpty(classRef) ? Type.GetType(classRef) : null;
-                s_TypeMap[classRef] = type;
+                return;
+            }
+            
+            if (!type.IsVisible || !type.IsClass)
+            {
+                return;
             }
 
-            return type;
+            if (filter != null && !filter.IsConstraintSatisfied(type))
+            {
+                return;
+            }
+
+            if (excludedTypes != null && excludedTypes.Contains(type))
+            {
+                return;
+            }
+
+            output.Add(type);
         }
 
         #endregion
@@ -135,6 +149,8 @@ namespace com.ktgame.utils.class_type_reference
 
         private static string DrawTypeSelectionControl(Rect position, GUIContent label, string classRef, ClassTypeConstraintAttribute filter)
         {
+            classRef = classRef ?? "";
+
             if (label != null && label != GUIContent.none)
             {
                 position = EditorGUI.PrefixLabel(position, label);
@@ -151,14 +167,15 @@ namespace com.ktgame.utils.class_type_reference
                     {
                         if (s_SelectionControlID == controlID)
                         {
-                            if (classRef != s_SelectedClassRef)
+                            if (classRef != s_SelectedClassRef || EditorGUI.showMixedValue)
                             {
-                                classRef = s_SelectedClassRef;
+                                classRef = s_SelectedClassRef ?? "";
                                 GUI.changed = true;
                             }
 
                             s_SelectionControlID = 0;
                             s_SelectedClassRef = null;
+                            s_TargetWindow = null;
                         }
                     }
 
@@ -187,17 +204,21 @@ namespace com.ktgame.utils.class_type_reference
                     break;
 
                 case EventType.Repaint:
-                    // Remove assembly name from content of popup control.
-                    var classRefParts = classRef.Split(',');
-
-                    s_TempContent.text = classRefParts[0].Trim();
-                    if (s_TempContent.text == "")
+                    if (EditorGUI.showMixedValue)
                     {
-                        s_TempContent.text = "(None)";
+                        s_TempContent.text = "—";
                     }
-                    else if (ResolveType(classRef) == null)
+                    else
                     {
-                        s_TempContent.text += " {Missing}";
+                        s_TempContent.text = ClassTypeReference.GetTypeName(classRef);
+                        if (s_TempContent.text == "")
+                        {
+                            s_TempContent.text = "(None)";
+                        }
+                        else if (ClassTypeReference.ResolveType(classRef) == null)
+                        {
+                            s_TempContent.text += " {Missing}";
+                        }
                     }
 
                     EditorStyles.popup.Draw(position, s_TempContent, controlID);
@@ -208,9 +229,11 @@ namespace com.ktgame.utils.class_type_reference
             {
                 s_SelectionControlID = controlID;
                 s_SelectedClassRef = classRef;
+                s_TargetWindow = EditorWindow.focusedWindow != null ? EditorWindow.focusedWindow : EditorWindow.mouseOverWindow;
 
                 var filteredTypes = GetFilteredTypes(filter);
-                DisplayDropDown(position, filteredTypes, ResolveType(classRef), filter.Grouping);
+                var selectedType = EditorGUI.showMixedValue ? null : ClassTypeReference.ResolveType(classRef);
+                DisplayDropDown(position, filteredTypes, selectedType, filter != null ? filter.Grouping : DefaultGrouping, !EditorGUI.showMixedValue && classRef == "");
             }
 
             return classRef;
@@ -218,26 +241,31 @@ namespace com.ktgame.utils.class_type_reference
 
         private static void DrawTypeSelectionControl(Rect position, SerializedProperty property, GUIContent label, ClassTypeConstraintAttribute filter)
         {
+            bool restoreShowMixedValue = EditorGUI.showMixedValue;
             try
             {
-                bool restoreShowMixedValue = EditorGUI.showMixedValue;
                 EditorGUI.showMixedValue = property.hasMultipleDifferentValues;
 
-                property.stringValue = DrawTypeSelectionControl(position, label, property.stringValue, filter);
-
-                EditorGUI.showMixedValue = restoreShowMixedValue;
+                EditorGUI.BeginChangeCheck();
+                var selected = DrawTypeSelectionControl(position, label, property.stringValue, filter);
+                
+                if (EditorGUI.EndChangeCheck())
+                {
+                    property.stringValue = selected;
+                }
             }
             finally
             {
+                EditorGUI.showMixedValue = restoreShowMixedValue;
                 ExcludedTypeCollectionGetter = null;
             }
         }
 
-        private static void DisplayDropDown(Rect position, List<Type> types, Type selectedType, ClassGrouping grouping)
+        private static void DisplayDropDown(Rect position, List<Type> types, Type selectedType, ClassGrouping grouping, bool noneSelected)
         {
             var menu = new GenericMenu();
 
-            menu.AddItem(new GUIContent("(None)"), selectedType == null, s_OnSelectedTypeName, null);
+            menu.AddItem(new GUIContent("(None)"), noneSelected, s_OnSelectedTypeName, null);
             menu.AddSeparator("");
 
             for (int i = 0; i < types.Count; ++i)
@@ -292,6 +320,7 @@ namespace com.ktgame.utils.class_type_reference
 
         private static int s_SelectionControlID;
         private static string s_SelectedClassRef;
+        private static EditorWindow s_TargetWindow;
 
         private static readonly GenericMenu.MenuFunction2 s_OnSelectedTypeName = OnSelectedTypeName;
 
@@ -301,8 +330,18 @@ namespace com.ktgame.utils.class_type_reference
 
             s_SelectedClassRef = ClassTypeReference.GetClassRef(selectedType);
 
+            var window = s_TargetWindow != null ? s_TargetWindow : EditorWindow.focusedWindow;
+            if (window == null)
+            {
+                Debug.LogWarning("[ClassTypeReference] Không tìm thấy cửa sổ Inspector để áp dụng lựa chọn. Hãy chọn lại.");
+                s_SelectionControlID = 0;
+                s_SelectedClassRef = null;
+                return;
+            }
+
             var typeReferenceUpdatedEvent = EditorGUIUtility.CommandEvent("TypeReferenceUpdated");
-            EditorWindow.focusedWindow.SendEvent(typeReferenceUpdatedEvent);
+            window.SendEvent(typeReferenceUpdatedEvent);
+            window.Repaint();
         }
 
         #endregion
@@ -315,7 +354,25 @@ namespace com.ktgame.utils.class_type_reference
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            DrawTypeSelectionControl(position, property.FindPropertyRelative("classRef"), label, attribute as ClassTypeConstraintAttribute);
+            var classRefProperty = property.propertyType == SerializedPropertyType.String
+                ? property
+                : property.FindPropertyRelative("classRef");
+
+            if (classRefProperty == null || classRefProperty.propertyType != SerializedPropertyType.String)
+            {
+                EditorGUI.LabelField(position, label, new GUIContent("Use ClassTypeReference or string"));
+                return;
+            }
+
+            label = EditorGUI.BeginProperty(position, label, property);
+            try
+            {
+                DrawTypeSelectionControl(position, classRefProperty, label, attribute as ClassTypeConstraintAttribute);
+            }
+            finally
+            {
+                EditorGUI.EndProperty();
+            }
         }
     }
 }

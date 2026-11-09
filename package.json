@@ -3,6 +3,7 @@
   "version": "1.0.5",
   "displayName": "com.ktgame.utils.class-type-reference",
   "description": "Class Type Reference",
+  "unity": "2021.3",
   "author": {
     "name": "ktgame",
     "email": "khanhquang0912qh@gmail.com",
